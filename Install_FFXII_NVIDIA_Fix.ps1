@@ -20,6 +20,7 @@ try {
 $AppName = "FFXII_NVIDIA_Fix"
 $GameName = "Final Fantasy XII: The Zodiac Age"
 $SteamAppId = "595520"
+$GameExeName = "FFXII_TZA.exe"
 $ProfileFileName = "FFXII_ShaderCacheOff.nip"
 $ImportTimeoutSec = 60
 
@@ -134,6 +135,28 @@ function Test-SteamGameInstalled($SteamPath, $AppId) {
     }
 
     return $false
+}
+
+function Get-GameExePath($SteamPath, $AppId, $ExeName) {
+    # Only used to give the desktop shortcut the game's own icon.
+    if (!$SteamPath) { return $null }
+
+    foreach ($library in (Get-SteamLibraryFolders -SteamPath $SteamPath)) {
+        $manifest = Join-Path $library "steamapps\appmanifest_$AppId.acf"
+        if (!(Test-Path $manifest)) { continue }
+
+        $installDir = [regex]::Match((Get-Content $manifest -Raw), '"installdir"\s+"([^"]+)"').Groups[1].Value
+        if (!$installDir) { continue }
+
+        $gameDir = Join-Path $library "steamapps\common\$installDir"
+        if (!(Test-Path $gameDir)) { continue }
+
+        $exe = Get-ChildItem -Path $gameDir -Filter $ExeName -Recurse -Depth 2 -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($exe) { return $exe.FullName }
+    }
+
+    return $null
 }
 
 function Test-NipProfile {
@@ -416,6 +439,19 @@ function Invoke-Install {
 `$SteamGame = "steam://rungameid/$SteamAppId"
 `$TimeoutSec = $ImportTimeoutSec
 
+function Test-NipUsable {
+    # An invalid .nip makes nvidiaProfileInspector sit on an error dialog instead of
+    # exiting, which would stall the launch. Never hand it a file we have not checked.
+    param([string]`$Path)
+    if (!(Test-Path `$Path)) { return `$false }
+    `$raw = Get-Content -Path `$Path -Raw -ErrorAction SilentlyContinue
+    if ([string]::IsNullOrWhiteSpace(`$raw)) { return `$false }
+    if (`$raw -match "PLACEHOLDER FILE") { return `$false }
+    try { `$xml = [xml]`$raw } catch { return `$false }
+    if (!`$xml.DocumentElement -or `$xml.DocumentElement.Name -notmatch "Profile") { return `$false }
+    return [bool]`$xml.SelectSingleNode("//Profile")
+}
+
 function Test-ProfileStillApplied {
     # Re-importing needs administrator rights, which means a UAC prompt on every
     # launch. The driver profile persists, so only re-import when the driver
@@ -427,7 +463,11 @@ function Test-ProfileStillApplied {
     return `$saved -eq (Get-Item `$DrsDb).LastWriteTimeUtc.ToString("o")
 }
 
-if (Test-ProfileStillApplied) {
+if (!(Test-NipUsable `$NipPath)) {
+    # No profile to import. Whatever was set by hand in NVIDIA Profile Inspector
+    # is stored in the driver and stays applied, so just start the game.
+    Write-Host "No exported .nip available - using the driver profile as-is."
+} elseif (Test-ProfileStillApplied) {
     Write-Host "FFXII NVIDIA profile is still applied. Skipping re-import."
 } else {
     Write-Host "Driver profiles changed since install. Re-applying FFXII NVIDIA profile..."
@@ -451,12 +491,17 @@ Start-Process `$SteamGame
 
     Set-Content -Path $LauncherPath -Value $launcherContent -Encoding UTF8
 
+    $gameExe = Get-GameExePath -SteamPath $steamPath -AppId $SteamAppId -ExeName $GameExeName
+    $iconLocation = if ($gameExe) { "$gameExe,0" } else { "powershell.exe,0" }
+
     $wsh = New-Object -ComObject WScript.Shell
     $shortcut = $wsh.CreateShortcut($DesktopShortcut)
-    $shortcut.TargetPath = "powershell.exe"
-    $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$LauncherPath`""
+    $shortcut.TargetPath = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+    # -WindowStyle Hidden keeps a console from flashing up on every launch.
+    $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherPath`""
     $shortcut.WorkingDirectory = $InstallDir
-    $shortcut.IconLocation = "powershell.exe,0"
+    $shortcut.IconLocation = $iconLocation
+    $shortcut.Description = "Applies the FFXII NVIDIA profile if needed, then launches the game"
     $shortcut.Save()
 
     Write-Ok "Desktop shortcut created:"
