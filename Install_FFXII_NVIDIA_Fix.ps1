@@ -251,7 +251,7 @@ function Backup-DriverProfileStore {
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 
     $copied = 0
-    foreach ($name in @("nvdrsdb0.bin", "nvdrsdb1.bin", "nvdrssel.bin")) {
+    foreach ($name in $DrsFiles) {
         $source = Join-Path $DrsDir $name
         if (Test-Path $source) {
             Copy-Item -Path $source -Destination (Join-Path $Destination $name) -Force
@@ -294,12 +294,26 @@ function Import-NvidiaProfile {
     return ($before -ne (Get-DrsStamp))
 }
 
+$DrsFiles = @("nvdrsdb0.bin", "nvdrsdb1.bin", "nvdrssel.bin")
+
 function Get-DrsStamp {
-    $db = Join-Path $DrsDir "nvdrsdb0.bin"
-    if (Test-Path $db) {
-        return (Get-Item $db).LastWriteTimeUtc.ToString("o")
+    # The driver double-buffers its profile store: writes alternate between
+    # nvdrsdb0.bin and nvdrsdb1.bin, and the single byte in nvdrssel.bin selects
+    # which one is active. Watching only db0 misses every change that lands in db1,
+    # which is what a successful import looks like half the time.
+    if (!(Test-Path $DrsDir)) { return "" }
+
+    $parts = foreach ($name in $DrsFiles) {
+        $file = Join-Path $DrsDir $name
+        if (Test-Path $file) {
+            $item = Get-Item $file
+            "{0}:{1}:{2}" -f $name, $item.Length, $item.LastWriteTimeUtc.ToString("o")
+        } else {
+            "${name}:-"
+        }
     }
-    return ""
+
+    return ($parts -join "|")
 }
 
 function Invoke-Uninstall {
@@ -435,9 +449,24 @@ function Invoke-Install {
 `$NpiExe = "$NpiExe"
 `$NipPath = "$InstalledProfile"
 `$StateFile = "$StateFile"
-`$DrsDb = "$(Join-Path $DrsDir 'nvdrsdb0.bin')"
+`$DrsDir = "$DrsDir"
+`$DrsFiles = @("nvdrsdb0.bin", "nvdrsdb1.bin", "nvdrssel.bin")
 `$SteamGame = "steam://rungameid/$SteamAppId"
 `$TimeoutSec = $ImportTimeoutSec
+
+function Get-DrsStamp {
+    # The driver double-buffers its profile store: writes alternate between
+    # nvdrsdb0.bin and nvdrsdb1.bin, and nvdrssel.bin selects the active one.
+    if (!(Test-Path `$DrsDir)) { return "" }
+    `$parts = foreach (`$name in `$DrsFiles) {
+        `$file = Join-Path `$DrsDir `$name
+        if (Test-Path `$file) {
+            `$item = Get-Item `$file
+            "{0}:{1}:{2}" -f `$name, `$item.Length, `$item.LastWriteTimeUtc.ToString("o")
+        } else { "`${name}:-" }
+    }
+    return (`$parts -join "|")
+}
 
 function Test-NipUsable {
     # An invalid .nip makes nvidiaProfileInspector sit on an error dialog instead of
@@ -456,11 +485,11 @@ function Test-ProfileStillApplied {
     # Re-importing needs administrator rights, which means a UAC prompt on every
     # launch. The driver profile persists, so only re-import when the driver
     # profile store changed (driver update, GeForce Experience reset, etc).
-    if (!(Test-Path `$StateFile) -or !(Test-Path `$DrsDb)) { return `$false }
+    if (!(Test-Path `$StateFile)) { return `$false }
     try {
         `$saved = (Get-Content `$StateFile -Raw | ConvertFrom-Json).DrsStamp
     } catch { return `$false }
-    return `$saved -eq (Get-Item `$DrsDb).LastWriteTimeUtc.ToString("o")
+    return (`$saved -and `$saved -eq (Get-DrsStamp))
 }
 
 if (!(Test-NipUsable `$NipPath)) {
@@ -480,7 +509,7 @@ if (!(Test-NipUsable `$NipPath)) {
         Write-Warning "Profile import failed with exit code `$(`$proc.ExitCode). Launching the game anyway."
     } else {
         Write-Host "Profile re-applied."
-        @{ DrsStamp = (Get-Item `$DrsDb).LastWriteTimeUtc.ToString("o") } |
+        @{ DrsStamp = Get-DrsStamp } |
             ConvertTo-Json | Set-Content -Path `$StateFile -Encoding UTF8
     }
 }
