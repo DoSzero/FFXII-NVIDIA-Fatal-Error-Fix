@@ -34,9 +34,10 @@ This installer automatically:
 
 ## Before You Start
 
-> **The `.nip` file in this repository is a placeholder.** You must export a real
-> profile yourself, because a `.nip` is tied to the driver version installed on
-> your machine.
+> **The bundled `.nip` was exported on driver 591.86.** It works as-is on that
+> driver. A `.nip` is tied to the driver version it came from, so if the import
+> fails or the crash persists on a different driver, export a replacement
+> yourself using the steps below.
 
 1. Run the installer once so it downloads `nvidiaProfileInspector.exe` into
    `%LOCALAPPDATA%\FFXII_NVIDIA_Fix`, or download it yourself from the
@@ -45,9 +46,10 @@ This installer automatically:
 3. Select the **Final Fantasy XII: The Zodiac Age** profile.
 4. Set **Shader Cache** to `Off` and apply.
 5. Export the profile as `FFXII_ShaderCacheOff.nip`.
-6. Overwrite the placeholder file next to `Install_FFXII_NVIDIA_Fix.bat`.
+6. Overwrite the file next to `Install_FFXII_NVIDIA_Fix.bat`.
 
-If you skip this, the installer stops with a clear error and changes nothing.
+If the `.nip` is missing, empty, or not valid profile XML, the installer stops with
+a clear error and changes nothing.
 
 ---
 
@@ -85,7 +87,7 @@ removes the desktop shortcut and `%LOCALAPPDATA%\FFXII_NVIDIA_Fix`.
 | --- | --- |
 | `Install_FFXII_NVIDIA_Fix.bat` | Launcher that starts the PowerShell installer and reports its exit code |
 | `Install_FFXII_NVIDIA_Fix.ps1` | Main installer: validation, download, backup, profile import, shortcut creation |
-| `FFXII_ShaderCacheOff.nip` | NVIDIA Profile Inspector profile for FFXII — **placeholder, replace it** |
+| `FFXII_ShaderCacheOff.nip` | NVIDIA Profile Inspector profile for FFXII, exported on driver 591.86 |
 
 ---
 
@@ -102,7 +104,7 @@ Verifies that an NVIDIA graphics card is installed.
 
 ### 3. Validates the `.nip` profile
 
-Confirms the file is real profile XML and not the shipped placeholder. Importing
+Confirms the file is real profile XML and not a placeholder stub. Importing
 an invalid `.nip` makes NVIDIA Profile Inspector hang on an error dialog, so the
 installer aborts first and leaves driver settings untouched.
 
