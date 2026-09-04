@@ -1,0 +1,8 @@
+# NVIDIA Profile Inspector writes .nip as UTF-8 with a BOM and CRLF endings, while
+# the XML declaration claims utf-16. NPI parses its own output fine, but any line
+# ending or BOM normalisation on the way through git would corrupt it.
+*.nip -text
+
+# Windows scripts must keep CRLF.
+*.bat text eol=crlf
+*.ps1 text eol=crlf

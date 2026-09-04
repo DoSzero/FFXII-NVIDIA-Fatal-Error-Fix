@@ -1,3 +1,25 @@
-PLACEHOLDER FILE
-
-Replace this file with the real exported NVIDIA Profile Inspector profile named FFXII_ShaderCacheOff.nip.
+﻿<?xml version="1.0" encoding="utf-16"?>
+<ArrayOfProfile>
+  <Profile>
+    <ProfileName>FINAL FANTASY XII THE ZODIAC AGE</ProfileName>
+    <Executeables>
+      <string>ffxii_tza_gamesetting.exe</string>
+      <string>ffxii_tza.exe</string>
+    </Executeables>
+    <Settings>
+      <ProfileSetting>
+        <SettingNameInfo>Shader Cache</SettingNameInfo>
+        <SettingID>1675263</SettingID>
+        <SettingValue>0</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+      <ProfileSetting>
+        <SettingNameInfo>Shader disk cache maximum size</SettingNameInfo>
+        <SettingID>11306135</SettingID>
+        <SettingValue>0</SettingValue>
+        <ValueType>Dword</ValueType>
+      </ProfileSetting>
+    </Settings>
+    <ExecutableFindFiles />
+  </Profile>
+</ArrayOfProfile>
